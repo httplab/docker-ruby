@@ -1,25 +1,27 @@
-FROM buildpack-deps:xenial
+FROM centos:7
 
-ENV RUBY_MAJOR 2.3
-ENV RUBY_VERSION 2.3.1
-ENV RUBY_DOWNLOAD_SHA256 b87c738cb2032bf4920fef8e3864dc5cf8eae9d89d8d523ce0236945c5797dcd
-ENV RUBYGEMS_VERSION 2.6.6
+ENV RUBY_DIR /ruby
+ENV RUBY_VERSION 2.3.3
+ENV RUBY_INSTALL $RUBY_DIR/$RUBY_VERSION
 
-# some of ruby's build scripts are written in ruby
-# we purge this later to make sure our final image uses what we just built
-RUN apt-get update \
-  && apt-get install -y bison libgdbm-dev nodejs ruby \
-  && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /usr/src/ruby \
-  && curl -fSL -o ruby.tar.gz "http://cache.ruby-lang.org/pub/ruby/$RUBY_MAJOR/ruby-$RUBY_VERSION.tar.gz" \
-  && echo "$RUBY_DOWNLOAD_SHA256 *ruby.tar.gz" | sha256sum -c - \
-  && tar -xzf ruby.tar.gz -C /usr/src/ruby --strip-components=1 \
-  && rm ruby.tar.gz \
-  && cd /usr/src/ruby \
-  && autoconf \
-  && ./configure \
-  && make -j"$(nproc)" \
-  && make install \
-  && apt-get purge -y --auto-remove bison libgdbm-dev ruby \
-  && gem update --system $RUBYGEMS_VERSION \
-  && rm -r /usr/src/ruby
+RUN rpm -Uvh \
+    https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
+    yum update -y && \
+    yum install -y make which wget tar git \
+    gcc patch readline-devel zlib-devel      \
+    libyaml-devel libffi-devel openssl-devel \
+    gdbm-devel ncurses-devel libxml-devel bzip2
+
+RUN cd /usr/src && \
+    git clone https://github.com/sstephenson/ruby-build.git && \
+    ./ruby-build/install.sh && \
+    mkdir -p $RUBY_INSTALL && \
+    /usr/local/bin/ruby-build $RUBY_VERSION $RUBY_INSTALL && \
+    rm -rf /usr/src/ruby-build
+
+ENV NODE_VERSION 5.6.0
+
+RUN wget https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz -O /tmp/node-v${NODE_VERSION}-linux-x64.tar.gz && \
+  tar --strip-components 1 -xzvf /tmp/node-v* -C /usr/local
+
+ENV PATH $RUBY_INSTALL/bin:$PATH
